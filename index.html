@@ -1,0 +1,725 @@
+<!doctype html>
+<!--
+  Ejecutar: abre esta carpeta en Visual Studio Code y usa Live Server
+  (clic derecho en index.html > Open with Live Server).
+  GitHub: sube este index.html a la rama publicada por GitHub Pages.
+  Todo el arte y el sonido se generan en el navegador; no hay archivos externos.
+-->
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#10172b">
+  <title>Guerreros del Ki — Duelo pixel</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --gold: #ffd45c;
+      --ink: #10172b;
+      --panel: rgba(13, 20, 39, .94);
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #10172b; }
+    body {
+      color: #fff; font-family: "Trebuchet MS", system-ui, sans-serif;
+      user-select: none; -webkit-user-select: none; touch-action: none;
+    }
+    button { color: inherit; font: inherit; }
+    #game { position: fixed; inset: 0; display: grid; place-items: center; background: #10172b; }
+    #stage { position: relative; width: min(100vw, 177.78vh); height: min(100vh, 56.25vw); overflow: hidden; }
+    #world { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+    .screen {
+      position: absolute; inset: 0; z-index: 3; display: flex; align-items: center; justify-content: center;
+      padding: clamp(14px, 4vw, 42px); text-align: center;
+      background: linear-gradient(180deg, rgba(7, 13, 31, .48), rgba(7, 13, 31, .80));
+    }
+    .panel {
+      width: min(760px, 100%); padding: clamp(20px, 4vw, 38px);
+      border: 2px solid rgba(255, 212, 92, .72); border-radius: 20px;
+      background: var(--panel); box-shadow: 0 0 45px rgba(38, 141, 255, .22), inset 0 0 26px rgba(255,255,255,.035);
+    }
+    .eyebrow { color: #80dcff; font-weight: 900; letter-spacing: .22em; text-transform: uppercase; font-size: .78rem; }
+    h1 { margin: 12px 0; color: var(--gold); font-size: clamp(2rem, 6vw, 4.5rem); line-height: .98; text-shadow: 3px 4px 0 #a33b19, 0 0 24px rgba(255,210,73,.5); }
+    h2 { margin: 8px 0 5px; font-size: clamp(1.35rem, 4vw, 2.3rem); color: var(--gold); }
+    p { line-height: 1.45; color: #dce8ff; }
+    .subtitle { max-width: 550px; margin: 12px auto 22px; }
+    .start-btn, .again-btn {
+      border: 0; border-radius: 999px; padding: 15px 35px; color: #231b0b; font-weight: 1000;
+      font-size: 1.2rem; letter-spacing: .04em; cursor: pointer;
+      background: linear-gradient(180deg, #fff49a, #ffbb36 70%, #f58b24);
+      box-shadow: 0 6px 0 #a84d1d, 0 0 26px rgba(255,194,66,.55);
+      animation: float 1.8s ease-in-out infinite;
+    }
+    .start-btn:hover, .again-btn:hover { filter: brightness(1.12); transform: translateY(-2px); }
+    @keyframes float { 0%,100% { translate: 0 0; } 50% { translate: 0 -7px; } }
+    .credit { margin: 24px 0 0; color: #c8d1e7; font-size: .92rem; }
+    .hidden { display: none !important; }
+    #select-screen { background: rgba(7, 13, 31, .78); overflow: auto; touch-action: pan-y; }
+    #select-screen .panel { max-height: 100%; overflow: auto; }
+    .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 22px 0 12px; }
+    .fighter-card {
+      min-width: 0; padding: 10px 8px 12px; border: 2px solid #495978; border-radius: 14px;
+      background: #1b2743; cursor: pointer; transition: .16s ease; touch-action: manipulation;
+    }
+    .fighter-card:hover { transform: translateY(-4px); border-color: #9ce9ff; }
+    .fighter-card.selected { border-color: var(--gold); background: #39405a; box-shadow: 0 0 18px #ffcc4e70; }
+    .fighter-card canvas { width: 100%; height: clamp(70px, 15vw, 125px); image-rendering: pixelated; }
+    .fighter-card strong { display: block; font-size: clamp(.83rem, 2vw, 1rem); }
+    .fighter-card small { display: block; color: #c2cee4; margin-top: 3px; font-size: .72rem; }
+    #confirm-pick { margin-top: 10px; padding: 12px 26px; font-size: 1rem; }
+    .hint { color: #c1cee4; font-size: .88rem; }
+    #hud { position: absolute; z-index: 2; top: 3.5%; left: 4%; right: 4%; display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; pointer-events: none; }
+    .fighter-hud { width: 40%; min-width: 0; text-shadow: 1px 2px #111; }
+    .fighter-hud.enemy { text-align: right; }
+    .fighter-name { display: flex; justify-content: space-between; gap: 5px; align-items: center; font-weight: 900; font-size: clamp(.68rem, 2vw, 1rem); margin-bottom: 4px; }
+    .enemy .fighter-name { flex-direction: row-reverse; }
+    .bar { height: clamp(12px, 2.3vw, 20px); border: 2px solid #eaf3ff; background: #253044; transform: skewX(-8deg); overflow: hidden; box-shadow: 0 2px 4px #0008; }
+    .bar + .bar { margin-top: 4px; height: clamp(7px, 1.2vw, 11px); border-width: 1px; }
+    .fill { height: 100%; width: 100%; transition: width .12s linear; }
+    .health-fill { background: linear-gradient(90deg, #ff4141, #ffbd45, #74f278); }
+    .energy-fill { background: linear-gradient(90deg, #386aff, #46e5ff); }
+    .enemy .fill { margin-left: auto; }
+    .center-hud { min-width: 74px; color: white; font-weight: 1000; text-align: center; text-shadow: 2px 2px #10172b; }
+    #timer { display: block; color: var(--gold); font-size: clamp(1.2rem, 3vw, 2rem); }
+    #round { font-size: .72rem; letter-spacing: .08em; }
+    #transform-note { margin-top: 3px; font-size: .65rem; color: #c5d3e9; }
+    #controls { position: absolute; z-index: 2; inset: auto 0 0; height: 34%; display: none; pointer-events: none; }
+    #controls.active { display: block; }
+    #stick-base { position: absolute; bottom: 9%; left: 6%; width: clamp(90px, 17vw, 145px); aspect-ratio: 1; border: 2px solid #ffffff69; border-radius: 50%; background: #101c3b66; pointer-events: auto; touch-action: none; }
+    #stick-knob { position: absolute; top: 50%; left: 50%; width: 43%; height: 43%; transform: translate(-50%,-50%); border: 2px solid #ffffffb0; border-radius: 50%; background: #83d8ff8c; box-shadow: 0 0 18px #55bfff8a; }
+    .action-buttons { position: absolute; right: 5%; bottom: 8%; display: flex; align-items: end; gap: clamp(12px, 4vw, 30px); pointer-events: auto; }
+    .action {
+      width: clamp(68px, 13vw, 108px); aspect-ratio: 1; border-radius: 50%; border: 3px solid #ffffffa8;
+      font-weight: 1000; font-size: clamp(.75rem, 2vw, 1rem); text-shadow: 1px 2px #111; touch-action: none;
+      box-shadow: inset 0 0 18px #ffffff42, 0 6px 12px #0008; cursor: pointer;
+    }
+    #punch-btn { background: radial-gradient(circle at 35% 25%, #ffef8a, #ff7e29 65%, #a82c37); }
+    #skill-btn { background: radial-gradient(circle at 35% 25%, #c4ffff, #28aaff 60%, #4542d5); }
+    .action:active, .action.pressed { filter: brightness(1.35); transform: scale(.94); }
+    #result-screen .panel { width: min(600px, 100%); }
+    #result-title { font-size: clamp(2.4rem, 8vw, 5rem); }
+    #result-copy { margin: 10px 0 22px; }
+    @media (max-width: 600px) {
+      .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+      #select-screen { align-items: flex-start; }
+      #select-screen .panel { margin: auto 0; padding: 17px; }
+      .fighter-card { padding: 5px; }
+      .fighter-card canvas { height: 70px; }
+      #hud { top: 2%; left: 3%; right: 3%; gap: 5px; }
+      .fighter-hud { width: 39%; }
+      .center-hud { min-width: 48px; }
+      #transform-note { font-size: .55rem; }
+      #controls { height: 29%; }
+    }
+    @media (max-height: 500px) {
+      #controls { height: 38%; }
+      #stick-base { width: 88px; }
+      .action { width: 68px; }
+      #select-screen .panel { padding: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <main id="game">
+    <div id="stage">
+      <canvas id="world" aria-label="Escenario del juego de lucha"></canvas>
+      <section id="hud" class="hidden" aria-label="Marcador">
+        <div class="fighter-hud">
+          <div class="fighter-name"><span id="player-label">Jugador</span><span id="player-form"></span></div>
+          <div class="bar"><div id="player-health" class="fill health-fill"></div></div>
+          <div class="bar"><div id="player-energy" class="fill energy-fill"></div></div>
+        </div>
+        <div class="center-hud"><span id="timer">90</span><span id="round">RONDA 1</span><div id="transform-note">Transformación al 50% de vida + 65 ki</div></div>
+        <div class="fighter-hud enemy">
+          <div class="fighter-name"><span id="enemy-label">Rival</span><span id="enemy-form"></span></div>
+          <div class="bar"><div id="enemy-health" class="fill health-fill"></div></div>
+          <div class="bar"><div id="enemy-energy" class="fill energy-fill"></div></div>
+        </div>
+      </section>
+      <section id="controls" aria-label="Controles táctiles">
+        <div id="stick-base" aria-label="Joystick virtual"><div id="stick-knob"></div></div>
+        <div class="action-buttons">
+          <button id="punch-btn" class="action" type="button" aria-label="Pegar">PEGAR</button>
+          <button id="skill-btn" class="action" type="button" aria-label="Mantener para cargar ki y soltar para lanzar habilidad">KI<br>HABILIDAD</button>
+        </div>
+      </section>
+      <section id="intro-screen" class="screen">
+        <div class="panel">
+          <div class="eyebrow">Duelo de guerreros · Pixel arena</div>
+          <h1>¡Estás listo<br>para jugar!</h1>
+          <p class="subtitle">Elige a tu guerrero, domina el ki y demuestra quién manda en el campo de batalla.</p>
+          <button id="start-btn" class="start-btn" type="button">Comenzar</button>
+          <p class="credit">Hecho por un jugador de LoL 🎮</p>
+        </div>
+      </section>
+      <section id="select-screen" class="screen hidden">
+        <div class="panel">
+          <div class="eyebrow">Elige tu luchador</div>
+          <h2>¿Quién entra al combate?</h2>
+          <p class="hint">Cada guerrero tiene su propio estilo, transformación y técnica.</p>
+          <div id="fighter-cards" class="cards"></div>
+          <button id="confirm-pick" class="start-btn" type="button">¡A luchar!</button>
+          <p class="hint">La transformación se activa con 50% de vida o menos y al menos 65 de ki.</p>
+        </div>
+      </section>
+      <section id="result-screen" class="screen hidden">
+        <div class="panel">
+          <div class="eyebrow">Fin del combate</div>
+          <h2 id="result-title">¡Victoria!</h2>
+          <p id="result-copy">El combate ha terminado.</p>
+          <button id="again-btn" class="again-btn" type="button">Volver a jugar</button>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script>
+  (() => {
+    "use strict";
+
+    // PERSONAJES ORIGINALES: sprites de lucha retro dibujados en pixel art.
+    const roster = [
+      {
+        id: "brasa", name: "Brasa", title: "Viajero del cielo", skill: "Pulso solar",
+        colors: { hair: "#202431", skin: "#e8ad7e", suit: "#168b9c", under: "#303c67", boots: "#e7dfce", aura: "#39d9ff", accent: "#f0a545" },
+        form: { name: "Ritmo estelar", hair: "#d7efff", aura: "#fff06a", multiplier: 1.16 }
+      },
+      {
+        id: "prisma", name: "Prisma", title: "Guardiana del horizonte", skill: "Lanza refractada",
+        colors: { hair: "#d9dce9", skin: "#ba795d", suit: "#8eaa43", under: "#393e71", boots: "#dce9e0", aura: "#87a5ff", accent: "#e3c878" },
+        form: { name: "Espectro vivo", hair: "#a8fff1", aura: "#b9faff", multiplier: 1.16 }
+      },
+      {
+        id: "nebul", name: "Nébula", title: "Exploradora de las ruinas", skill: "Eco lunar",
+        colors: { hair: "#5b397b", skin: "#e0aa94", suit: "#563e88", under: "#26345b", boots: "#e1d1c5", aura: "#c570ff", accent: "#49c3c8" },
+        form: { name: "Marea astral", hair: "#e6caff", aura: "#c79aff", multiplier: 1.18 }
+      },
+      {
+        id: "musgo", name: "Musgo", title: "Centinela del valle", skill: "Raíz de trueno",
+        colors: { hair: "#58713f", skin: "#d19a70", suit: "#527346", under: "#534c69", boots: "#d6b889", aura: "#8bff9b", accent: "#edc963" },
+        form: { name: "Corazón antiguo", hair: "#b4dc68", aura: "#6affb5", multiplier: 1.17 }
+      }
+    ];
+
+    const canvas = document.getElementById("world");
+    const ctx = canvas.getContext("2d", { alpha: false });
+    const stage = document.getElementById("stage");
+    const ui = {
+      intro: document.getElementById("intro-screen"), select: document.getElementById("select-screen"),
+      result: document.getElementById("result-screen"), hud: document.getElementById("hud"),
+      controls: document.getElementById("controls"), timer: document.getElementById("timer"),
+      playerLabel: document.getElementById("player-label"), enemyLabel: document.getElementById("enemy-label"),
+      playerForm: document.getElementById("player-form"), enemyForm: document.getElementById("enemy-form"),
+      playerHealth: document.getElementById("player-health"), enemyHealth: document.getElementById("enemy-health"),
+      playerEnergy: document.getElementById("player-energy"), enemyEnergy: document.getElementById("enemy-energy"),
+      cards: document.getElementById("fighter-cards"), resultTitle: document.getElementById("result-title"),
+      resultCopy: document.getElementById("result-copy")
+    };
+    const W = 960, H = 540, floorY = 430;
+    const keys = new Set();
+    const input = { axis: 0, skillHeld: false };
+    let playerChoice = 0, player, enemy, projectiles = [], particles = [];
+    let gameState = "intro", elapsed = 0, remaining = 90, lastFrame = 0;
+    let shake = 0, flash = 0, aiThink = 0, aiAction = "approach", aiGuard = 0;
+    let audioContext;
+
+    // AJUSTE DEL LIENZO: resolución lógica fija y escalado nítido en pantallas retina.
+    function resizeCanvas() {
+      const rect = stage.getBoundingClientRect();
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(rect.width * ratio);
+      canvas.height = Math.round(rect.height * ratio);
+      ctx.imageSmoothingEnabled = false;
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    // SPRITES RETRO: siluetas compactas, contorno oscuro y animación por bloques de color.
+    function drawFighter(g, fighter, x, y, facing, time, scale = 1) {
+      const c = fighter.data.colors;
+      const transformed = fighter.transformed;
+      const hair = transformed ? fighter.data.form.hair : c.hair;
+      const aura = transformed ? fighter.data.form.aura : c.aura;
+      const walk = fighter.action === "walk" ? Math.sin(time * 13) * 3 : 0;
+      const bob = Math.sin(time * 5 + fighter.phase) * (fighter.action === "idle" ? 1 : 2);
+      const hurt = fighter.hurt > 0 ? Math.sin(time * 50) * 3 : 0;
+      const strike = fighter.attackTime > 0 ? (1 - fighter.attackTime / .2) : 0;
+      const charge = fighter.action === "charge";
+      g.save();
+      g.translate(Math.round(x + hurt), Math.round(y + bob));
+      g.scale(facing * scale, scale);
+
+      if (charge || transformed) {
+        g.globalAlpha = charge ? .30 + .16 * Math.sin(time * 19) : .16;
+        g.fillStyle = aura;
+        g.beginPath(); g.ellipse(0, -30, 21 + Math.sin(time * 13) * 3, 38, 0, 0, Math.PI * 2); g.fill();
+        g.globalAlpha = 1;
+      }
+
+      const leftLeg = Math.max(0, walk), rightLeg = Math.max(0, -walk);
+      g.fillStyle = "#24243a";
+      g.fillRect(-9, -17 + leftLeg, 7, 13); g.fillRect(2, -17 + rightLeg, 7, 13);
+      g.fillStyle = c.under;
+      g.fillRect(-8, -16 + leftLeg, 5, 10); g.fillRect(3, -16 + rightLeg, 5, 10);
+      g.fillStyle = c.boots;
+      g.fillRect(-11, -5 + leftLeg, 9, 5); g.fillRect(2, -5 + rightLeg, 10, 5);
+      g.fillStyle = "#24243a"; g.fillRect(-11, -36, 22, 20);
+      g.fillStyle = c.suit; g.fillRect(-9, -35, 18, 17);
+      g.fillStyle = c.accent; g.fillRect(-9, -21, 18, 3);
+      g.fillStyle = c.skin;
+      g.fillRect(-14, -34, 5, 13);
+      if (strike > 0) {
+        g.fillRect(9, -33, 9 + strike * 12, 6);
+        g.fillStyle = "#24243a"; g.fillRect(15 + strike * 12, -34, 7, 8);
+        g.fillStyle = c.skin; g.fillRect(17 + strike * 12, -33, 5, 5);
+      } else {
+        g.fillStyle = "#24243a"; g.fillRect(9, -34, 7, 9);
+        g.fillStyle = c.skin; g.fillRect(10, -33, 5, 7);
+      }
+      g.fillStyle = "#24243a"; g.fillRect(-8, -51, 16, 16);
+      g.fillStyle = c.skin; g.fillRect(-6, -49, 13, 12);
+      g.fillStyle = "#2a253b"; g.fillRect(2, -44, 3, 2);
+      g.fillStyle = hair;
+      if (fighter.data.id === "brasa") {
+        g.fillRect(-9, -54, 18, 5); g.fillRect(-6, -59, 6, 7); g.fillRect(0, -57, 8, 6);
+      } else if (fighter.data.id === "prisma") {
+        g.fillRect(-9, -54, 18, 5); g.fillRect(-8, -59, 5, 7); g.fillRect(0, -60, 6, 8); g.fillRect(6, -56, 5, 7);
+      } else if (fighter.data.id === "nebul") {
+        g.fillRect(-10, -55, 20, 7); g.fillRect(-11, -49, 4, 7); g.fillRect(7, -51, 5, 8);
+        g.fillStyle = c.accent; g.fillRect(-12, -50, 3, 13);
+      } else {
+        g.fillRect(-10, -54, 20, 6); g.fillRect(-8, -59, 5, 7); g.fillRect(-2, -62, 6, 9); g.fillRect(5, -57, 5, 7);
+      }
+      if (transformed) {
+        g.fillStyle = hair; g.fillRect(-2, -65, 5, 7); g.fillRect(3, -62, 5, 5);
+      }
+      if (fighter.action === "block") {
+        g.fillStyle = "#fff"; g.globalAlpha = .7; g.fillRect(12, -48, 5, 25); g.globalAlpha = 1;
+      }
+      g.restore();
+    }
+
+    // FONDO: escenario único de montaña, cielo nocturno, plataformas y público pixelado.
+    function drawBackground(g, time) {
+      const sky = g.createLinearGradient(0, 0, 0, H);
+      sky.addColorStop(0, "#13264d"); sky.addColorStop(.56, "#765288"); sky.addColorStop(1, "#e18757");
+      g.fillStyle = sky; g.fillRect(0, 0, W, H);
+      g.fillStyle = "#fff4c9"; g.beginPath(); g.arc(755, 105, 38, 0, Math.PI * 2); g.fill();
+      g.fillStyle = "#ffcf8b"; g.fillRect(748, 99, 14, 12);
+      // Estrellas
+      for (let i = 0; i < 38; i++) {
+        const x = (i * 173 + 29) % W, y = (i * 71 + 18) % 175;
+        g.globalAlpha = .35 + .4 * Math.abs(Math.sin(time * 1.7 + i));
+        g.fillStyle = "#fff"; g.fillRect(x, y, i % 4 === 0 ? 3 : 2, i % 4 === 0 ? 3 : 2);
+      }
+      g.globalAlpha = 1;
+      // Montañas lejanas y riscos
+      g.fillStyle = "#35466c";
+      g.beginPath(); g.moveTo(0, 315); g.lineTo(95, 190); g.lineTo(178, 280); g.lineTo(300, 165); g.lineTo(425, 305);
+      g.lineTo(560, 180); g.lineTo(710, 300); g.lineTo(838, 185); g.lineTo(960, 290); g.lineTo(960, 430); g.lineTo(0, 430); g.fill();
+      g.fillStyle = "#536184";
+      g.beginPath(); g.moveTo(80, 430); g.lineTo(180, 275); g.lineTo(250, 347); g.lineTo(345, 245); g.lineTo(460, 430); g.fill();
+      g.fillStyle = "#292d4b";
+      g.beginPath(); g.moveTo(640, 430); g.lineTo(740, 275); g.lineTo(812, 350); g.lineTo(880, 255); g.lineTo(960, 365); g.lineTo(960, 430); g.fill();
+      // Arena de piedra
+      g.fillStyle = "#b87c5a"; g.fillRect(0, 390, W, 150);
+      g.fillStyle = "#d79a69"; g.fillRect(0, 390, W, 11);
+      g.fillStyle = "#925d52";
+      for (let i = 0; i < 20; i++) {
+        const x = i * 53 + (i % 2) * 18;
+        g.fillRect(x, 409 + (i % 3) * 29, 31 + (i % 4) * 5, 3);
+        g.fillRect((x + 37) % W, 423 + (i % 2) * 37, 4, 13);
+      }
+      g.fillStyle = "#fff3ca"; g.fillRect(0, 388, W, 3);
+      // Motas de polvo que recorren el suelo
+      g.fillStyle = "#ffe1a1";
+      for (let i = 0; i < 12; i++) {
+        const x = (i * 97 + time * (18 + i % 4) * 5) % W;
+        g.globalAlpha = .18 + (i % 3) * .08; g.fillRect(x, 395 + (i % 5) * 8, 4, 2);
+      }
+      g.globalAlpha = 1;
+    }
+
+    // INTERFAZ DE SELECCIÓN: cada tarjeta muestra una miniatura pixel art del luchador.
+    function makeFighter(data) {
+      return {
+        data, x: 0, y: floorY, hp: 100, energy: 25, facing: 1, speed: 180,
+        transformed: false, action: "idle", hurt: 0, attackCooldown: 0, attackTime: 0,
+        skillCooldown: 0, blockTime: 0, chargeTime: 0, chargeGoal: .8, phase: Math.random() * 6,
+        invulnerable: 0, ai: false
+      };
+    }
+    function drawCardArt(cardCanvas, data) {
+      const cg = cardCanvas.getContext("2d");
+      cg.imageSmoothingEnabled = false;
+      cg.clearRect(0, 0, cardCanvas.width, cardCanvas.height);
+      const gradient = cg.createLinearGradient(0, 0, 0, cardCanvas.height);
+      gradient.addColorStop(0, "#334466"); gradient.addColorStop(1, "#172139");
+      cg.fillStyle = gradient; cg.fillRect(0, 0, cardCanvas.width, cardCanvas.height);
+      cg.fillStyle = "#ffd45c"; cg.fillRect(0, cardCanvas.height - 13, cardCanvas.width, 3);
+      const sample = makeFighter(data);
+      drawFighter(cg, sample, cardCanvas.width / 2, cardCanvas.height - 9, 1, 0, 1.12);
+    }
+    function buildCards() {
+      ui.cards.replaceChildren();
+      roster.forEach((fighter, index) => {
+        const card = document.createElement("button");
+        card.type = "button"; card.className = "fighter-card" + (index === playerChoice ? " selected" : "");
+        card.setAttribute("aria-pressed", index === playerChoice ? "true" : "false");
+        const art = document.createElement("canvas"); art.width = 180; art.height = 115;
+        const name = document.createElement("strong"); name.textContent = fighter.name;
+        const title = document.createElement("small"); title.textContent = fighter.title;
+        card.append(art, name, title);
+        drawCardArt(art, fighter);
+        card.addEventListener("click", () => {
+          playerChoice = index;
+          [...ui.cards.children].forEach((node, i) => {
+            node.classList.toggle("selected", i === index);
+            node.setAttribute("aria-pressed", i === index ? "true" : "false");
+          });
+        });
+        ui.cards.append(card);
+      });
+    }
+
+    // COMBATE: inicio y fin de ronda, colocación y actualización del marcador.
+    function beginFight() {
+      const enemyIndex = (playerChoice + 1 + Math.floor(Math.random() * (roster.length - 1))) % roster.length;
+      player = makeFighter(roster[playerChoice]);
+      enemy = makeFighter(roster[enemyIndex]);
+      player.x = 280; enemy.x = 680; player.facing = 1; enemy.facing = -1; enemy.ai = true;
+      projectiles = []; particles = []; elapsed = 0; remaining = 90;
+      aiThink = .4; aiAction = "approach"; aiGuard = 0;
+      gameState = "fight";
+      ui.intro.classList.add("hidden"); ui.select.classList.add("hidden"); ui.result.classList.add("hidden");
+      ui.hud.classList.remove("hidden"); ui.controls.classList.add("active");
+      ui.playerLabel.textContent = player.data.name; ui.enemyLabel.textContent = enemy.data.name;
+      updateHud();
+      try { audioContext ??= new (window.AudioContext || window.webkitAudioContext)(); audioContext.resume(); } catch {}
+    }
+    function finishFight(winner) {
+      if (gameState !== "fight") return;
+      gameState = "result";
+      const won = winner === player;
+      ui.resultTitle.textContent = won ? "¡Victoria!" : "¡Derrota!";
+      ui.resultTitle.style.color = won ? "#ffe36d" : "#ff8c83";
+      ui.resultCopy.textContent = won
+        ? `${player.data.name} vence a ${enemy.data.name}. ¡El poder del ki está de tu lado!`
+        : `${enemy.data.name} se lleva esta ronda. ¡Vuelve a intentarlo!`;
+      ui.hud.classList.add("hidden"); ui.controls.classList.remove("active");
+      ui.result.classList.remove("hidden");
+      input.axis = 0; input.skillHeld = false;
+    }
+    function updateHud() {
+      if (!player || !enemy) return;
+      ui.playerHealth.style.width = `${Math.max(0, player.hp)}%`;
+      ui.enemyHealth.style.width = `${Math.max(0, enemy.hp)}%`;
+      ui.playerEnergy.style.width = `${Math.min(100, player.energy)}%`;
+      ui.enemyEnergy.style.width = `${Math.min(100, enemy.energy)}%`;
+      ui.playerForm.textContent = player.transformed ? player.data.form.name : "";
+      ui.enemyForm.textContent = enemy.transformed ? enemy.data.form.name : "";
+      ui.timer.textContent = Math.ceil(remaining);
+    }
+
+    // EFECTOS: pequeñas partículas de impacto, polvo y aura de energía.
+    function burst(x, y, color, count = 12, speed = 150) {
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2, velocity = speed * (.35 + Math.random() * .8);
+        particles.push({ x, y, vx: Math.cos(angle) * velocity, vy: Math.sin(angle) * velocity, life: .25 + Math.random() * .42, max: .7, color, size: 2 + Math.random() * 4 });
+      }
+    }
+    function playTone(freq, duration = .09, type = "square", volume = .035) {
+      if (!audioContext) return;
+      try {
+        const oscillator = audioContext.createOscillator(), gain = audioContext.createGain();
+        oscillator.type = type; oscillator.frequency.setValueAtTime(freq, audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(Math.max(45, freq * .55), audioContext.currentTime + duration);
+        gain.gain.setValueAtTime(volume, audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(.001, audioContext.currentTime + duration);
+        oscillator.connect(gain); gain.connect(audioContext.destination);
+        oscillator.start(); oscillator.stop(audioContext.currentTime + duration);
+      } catch {}
+    }
+
+    // LÓGICA DE LUCHA: movimiento, golpes, bloqueo, carga y transformación con reglas compartidas.
+    function transform(fighter) {
+      if (fighter.transformed || fighter.hp > 50 || fighter.energy < 65) return;
+      fighter.transformed = true; fighter.energy -= 45; fighter.speed *= fighter.data.form.multiplier;
+      burst(fighter.x, fighter.y - 40, fighter.data.form.aura, 35, 210);
+      shake = .22; flash = .16; playTone(220, .42, "sawtooth", .07);
+    }
+    function doPunch(attacker, defender) {
+      if (gameState !== "fight" || attacker.attackCooldown > 0 || attacker.hurt > 0) return;
+      attacker.attackCooldown = .48; attacker.attackTime = .2; attacker.action = "punch";
+      playTone(140, .08, "square");
+      const distance = Math.abs(defender.x - attacker.x);
+      if (distance < 90 && Math.abs(defender.y - attacker.y) < 22 && defender.invulnerable <= 0) {
+        const blocked = defender.action === "block" && defender.blockTime > 0;
+        const damage = blocked ? 3 : attacker.transformed ? 11 : 9;
+        defender.hp = Math.max(0, defender.hp - damage);
+        defender.energy = Math.min(100, defender.energy + (blocked ? 3 : 7));
+        attacker.energy = Math.min(100, attacker.energy + 5);
+        defender.hurt = blocked ? .12 : .28; defender.invulnerable = blocked ? .12 : .32;
+        defender.x = Math.max(55, Math.min(W - 55, defender.x + attacker.facing * (blocked ? 7 : 20)));
+        burst((attacker.x + defender.x) / 2, defender.y - 45, blocked ? "#a9efff" : "#fff09c", blocked ? 6 : 13, blocked ? 100 : 190);
+        shake = blocked ? .05 : .11;
+        if (!blocked) playTone(95, .12, "sawtooth", .05);
+      }
+    }
+    function releaseSkill(fighter, charge) {
+      if (charge < .08 || fighter.skillCooldown > 0 || fighter.energy < 12 || gameState !== "fight") return;
+      const power = Math.min(1, charge / 1.6);
+      const cost = 12 + Math.round(power * 22);
+      if (fighter.energy < cost) return;
+      fighter.energy -= cost; fighter.skillCooldown = .65 + power * .35;
+      fighter.action = "idle";
+      const speed = (360 + power * 130) * fighter.facing;
+      projectiles.push({
+        x: fighter.x + fighter.facing * 27, y: fighter.y - 47, vx: speed,
+        radius: 7 + power * 8, damage: (10 + power * 13) * (fighter.transformed ? 1.12 : 1),
+        life: 2.4, owner: fighter, color: fighter.transformed ? fighter.data.form.aura : fighter.data.colors.aura,
+        skill: fighter.data.skill
+      });
+      burst(fighter.x + fighter.facing * 24, fighter.y - 47, fighter.data.colors.aura, 8, 120);
+      playTone(290 + power * 180, .22 + power * .18, "sawtooth", .05);
+    }
+    function startCharge(fighter) {
+      if (fighter.skillCooldown <= 0 && fighter.energy >= 12 && fighter.hurt <= 0) fighter.action = "charge";
+    }
+    function updateFighterTimers(f, dt) {
+      f.hurt = Math.max(0, f.hurt - dt);
+      f.attackCooldown = Math.max(0, f.attackCooldown - dt);
+      f.attackTime = Math.max(0, f.attackTime - dt);
+      f.skillCooldown = Math.max(0, f.skillCooldown - dt);
+      f.blockTime = Math.max(0, f.blockTime - dt);
+      f.invulnerable = Math.max(0, f.invulnerable - dt);
+      if (f.hurt > 0) f.action = "hurt";
+      else if (f.blockTime > 0) f.action = "block";
+      else if (f.attackTime > 0) f.action = "punch";
+      else if (input.skillHeld && f === player && f.energy >= 12) f.action = "charge";
+      else if (f.action !== "charge" || f === player) f.action = "idle";
+      if (f.energy < 100 && f.action !== "charge") f.energy = Math.min(100, f.energy + 2.7 * dt);
+      if (f.action === "charge") {
+        f.energy = Math.min(100, f.energy + 19 * dt);
+        f.chargeTime = Math.min(2.2, f.chargeTime + dt);
+        if (Math.random() < dt * 23) burst(f.x + (Math.random() - .5) * 44, f.y - 35 - Math.random() * 42, f.data.colors.aura, 1, 48);
+      }
+      if (f.hp <= 50 && f.energy >= 65 && !f.transformed) transform(f);
+    }
+    function updatePlayer(dt) {
+      const horizontal = input.axis || (keys.has("ArrowRight") || keys.has("d") ? 1 : 0) - (keys.has("ArrowLeft") || keys.has("a") ? 1 : 0);
+      const vertical = (keys.has("ArrowDown") || keys.has("s") ? 1 : 0) - (keys.has("ArrowUp") || keys.has("w") ? 1 : 0);
+      if (player.hurt <= 0 && !input.skillHeld && player.attackTime <= 0) {
+        player.x += horizontal * player.speed * dt;
+        player.y += vertical * player.speed * .48 * dt;
+        player.x = Math.max(45, Math.min(W - 45, player.x));
+        player.y = Math.max(335, Math.min(floorY, player.y));
+        if (horizontal) player.action = "walk";
+      }
+      player.facing = player.x <= enemy.x ? 1 : -1;
+      if (keys.has("j") || keys.has(" ")) {
+        keys.delete("j"); keys.delete(" ");
+        doPunch(player, enemy);
+      }
+      if (keys.has("k") && !input.skillHeld) {
+        input.skillHeld = true; player.chargeTime = 0; startCharge(player);
+      }
+      if (keys.has("l") && player.action !== "block") {
+        keys.delete("l"); player.blockTime = .32; player.action = "block";
+      }
+    }
+    function updateAI(dt) {
+      const gap = Math.abs(enemy.x - player.x), direction = player.x > enemy.x ? 1 : -1;
+      enemy.facing = direction;
+      aiThink -= dt;
+      if (aiThink <= 0) {
+        aiThink = .18 + Math.random() * .23;
+        if (enemy.hp <= 50 && enemy.energy >= 65 && !enemy.transformed) aiAction = "approach";
+        else if (player.action === "charge" && gap < 220 && Math.random() < .58) {
+          aiAction = "block"; aiGuard = .35 + Math.random() * .35;
+        } else if (gap < 78 && enemy.attackCooldown <= 0 && Math.random() < .56) aiAction = "punch";
+        else if (gap > 95 && enemy.energy >= 12 && enemy.skillCooldown <= 0 && Math.random() < .23) {
+          aiAction = "charge"; enemy.chargeTime = 0; enemy.chargeGoal = .55 + Math.random() * .4;
+        } else if (gap < 310 && enemy.energy >= 30 && enemy.skillCooldown <= 0 && Math.random() < .13) {
+          aiAction = "charge"; enemy.chargeTime = 0; enemy.chargeGoal = .55 + Math.random() * .4;
+        } else aiAction = "approach";
+      }
+      if (enemy.hurt <= 0) {
+        if (aiAction === "approach") {
+          if (gap > 67) enemy.x += direction * enemy.speed * .67 * dt;
+          const yDifference = player.y - enemy.y;
+          if (Math.abs(yDifference) > 12) enemy.y += Math.sign(yDifference) * enemy.speed * .25 * dt;
+          enemy.action = gap > 78 ? "walk" : "idle";
+        } else if (aiAction === "block") {
+          enemy.blockTime = Math.max(enemy.blockTime, aiGuard);
+          enemy.action = "block";
+          aiGuard -= dt;
+          if (aiGuard <= 0) aiAction = "approach";
+        } else if (aiAction === "punch") {
+          doPunch(enemy, player); aiAction = "approach";
+        } else if (aiAction === "charge") {
+          enemy.action = "charge";
+          if (enemy.chargeTime >= enemy.chargeGoal) {
+            releaseSkill(enemy, enemy.chargeTime); enemy.chargeTime = 0; aiAction = "approach";
+          }
+        }
+      } else if (aiAction === "charge") {
+        enemy.chargeTime = 0; aiAction = "approach";
+      }
+      enemy.x = Math.max(45, Math.min(W - 45, enemy.x));
+      enemy.y = Math.max(335, Math.min(floorY, enemy.y));
+    }
+    function updateProjectiles(dt) {
+      for (let i = projectiles.length - 1; i >= 0; i--) {
+        const p = projectiles[i]; p.x += p.vx * dt; p.life -= dt;
+        if (Math.random() < dt * 45) burst(p.x - Math.sign(p.vx) * 10, p.y, p.color, 1, 35);
+        const target = p.owner === player ? enemy : player;
+        if (Math.abs(p.x - target.x) < p.radius + 17 && Math.abs(p.y - (target.y - 46)) < 34 && target.invulnerable <= 0) {
+          const blocked = target.action === "block" && target.blockTime > 0 && Math.sign(target.x - p.x) === target.facing;
+          const damage = blocked ? p.damage * .22 : p.damage;
+          target.hp = Math.max(0, target.hp - damage);
+          target.energy = Math.min(100, target.energy + (blocked ? 5 : 10));
+          target.hurt = blocked ? .13 : .32; target.invulnerable = blocked ? .13 : .36;
+          target.x = Math.max(45, Math.min(W - 45, target.x + Math.sign(p.vx) * (blocked ? 8 : 24)));
+          burst(p.x, p.y, blocked ? "#e9ffff" : p.color, blocked ? 9 : 20, blocked ? 130 : 240);
+          shake = blocked ? .07 : .18; projectiles.splice(i, 1);
+          playTone(blocked ? 180 : 75, .17, "sawtooth", .06);
+          continue;
+        }
+        if (p.life <= 0 || p.x < -30 || p.x > W + 30) projectiles.splice(i, 1);
+      }
+    }
+    function update(dt) {
+      if (gameState !== "fight") return;
+      elapsed += dt; remaining = Math.max(0, remaining - dt);
+      updateFighterTimers(player, dt); updateFighterTimers(enemy, dt);
+      updatePlayer(dt); updateAI(dt); updateProjectiles(dt);
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i]; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 90 * dt; p.life -= dt;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      shake = Math.max(0, shake - dt); flash = Math.max(0, flash - dt);
+      updateHud();
+      if (player.hp <= 0) finishFight(enemy);
+      else if (enemy.hp <= 0) finishFight(player);
+      else if (remaining <= 0) finishFight(player.hp >= enemy.hp ? player : enemy);
+    }
+
+    // RENDER: escena, combatientes, proyectiles, efectos de impacto y destello de transformación.
+    function render(time) {
+      const sx = canvas.width / W, sy = canvas.height / H;
+      ctx.setTransform(sx, 0, 0, sy, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      ctx.clearRect(0, 0, W, H);
+      ctx.save();
+      if (shake > 0) ctx.translate((Math.random() - .5) * 12 * shake / .18, (Math.random() - .5) * 9 * shake / .18);
+      drawBackground(ctx, time);
+      if (gameState === "fight" || gameState === "result") {
+        if (player && enemy) {
+          drawFighter(ctx, player, player.x, player.y, player.facing, time);
+          drawFighter(ctx, enemy, enemy.x, enemy.y, enemy.facing, time);
+          for (const p of projectiles) {
+            ctx.globalAlpha = .28; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.radius * 2.5, 0, Math.PI * 2); ctx.fill();
+            ctx.globalAlpha = 1; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = "#fff"; ctx.fillRect(p.x - 3, p.y - 3, 6, 6);
+          }
+        }
+      } else {
+        const demo = makeFighter(roster[0]); demo.action = "idle";
+        drawFighter(ctx, demo, 480, floorY, 1, time, 1.45);
+        // Chispas decorativas alrededor del héroe del menú
+        for (let i = 0; i < 8; i++) {
+          const a = time * 1.7 + i * Math.PI / 4, x = 480 + Math.cos(a) * (48 + 8 * Math.sin(time * 3 + i)), y = 365 + Math.sin(a) * 65;
+          ctx.fillStyle = i % 2 ? "#6ceaff" : "#ffe267"; ctx.fillRect(Math.round(x), Math.round(y), 4, 4);
+        }
+      }
+      for (const p of particles) {
+        ctx.globalAlpha = Math.max(0, Math.min(1, p.life / p.max));
+        ctx.fillStyle = p.color; ctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
+      }
+      ctx.globalAlpha = 1;
+      if (flash > 0) { ctx.fillStyle = `rgba(255,255,220,${flash * 1.8})`; ctx.fillRect(0, 0, W, H); }
+      ctx.restore();
+    }
+    function frame(timestamp) {
+      const dt = Math.min(.033, lastFrame ? (timestamp - lastFrame) / 1000 : 0);
+      lastFrame = timestamp;
+      update(dt);
+      render(timestamp / 1000);
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    // CONTROLES DE TECLADO Y MANDO: WASD/flechas, J/espacio golpe, K mantener habilidad, L bloquear.
+    window.addEventListener("keydown", event => {
+      const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(key)) event.preventDefault();
+      if (key === "k" && !keys.has(key) && player) {
+        input.skillHeld = true; player.chargeTime = 0; startCharge(player);
+      }
+      keys.add(key);
+    });
+    window.addEventListener("keyup", event => {
+      const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+      keys.delete(key);
+      if (key === "k" && player && input.skillHeld) {
+        input.skillHeld = false; releaseSkill(player, player.chargeTime); player.chargeTime = 0;
+        if (player.action === "charge") player.action = "idle";
+      }
+    });
+    window.addEventListener("blur", () => {
+      keys.clear(); input.axis = 0;
+      if (input.skillHeld && player) {
+        input.skillHeld = false; releaseSkill(player, player.chargeTime); player.chargeTime = 0;
+        if (player.action === "charge") player.action = "idle";
+      }
+    });
+    const stick = document.getElementById("stick-base"), knob = document.getElementById("stick-knob");
+    let stickPointer = null;
+    function moveStick(event) {
+      if (stickPointer !== event.pointerId) return;
+      const rect = stick.getBoundingClientRect(), center = rect.left + rect.width / 2;
+      const dx = Math.max(-rect.width * .34, Math.min(rect.width * .34, event.clientX - center));
+      input.axis = dx / (rect.width * .34);
+      knob.style.left = `${50 + input.axis * 34}%`;
+    }
+    stick.addEventListener("pointerdown", event => {
+      event.preventDefault(); stickPointer = event.pointerId; stick.setPointerCapture(event.pointerId); moveStick(event);
+    });
+    stick.addEventListener("pointermove", moveStick);
+    function releaseStick(event) {
+      if (stickPointer !== event.pointerId) return;
+      stickPointer = null; input.axis = 0; knob.style.left = "50%";
+    }
+    stick.addEventListener("pointerup", releaseStick); stick.addEventListener("pointercancel", releaseStick);
+
+    // BOTONES TÁCTILES: pegar al tocar; la habilidad se carga mientras se mantiene y sale al soltar.
+    const punchButton = document.getElementById("punch-btn"), skillButton = document.getElementById("skill-btn");
+    punchButton.addEventListener("pointerdown", event => { event.preventDefault(); doPunch(player, enemy); punchButton.classList.add("pressed"); });
+    for (const type of ["pointerup", "pointercancel", "pointerleave"]) punchButton.addEventListener(type, () => punchButton.classList.remove("pressed"));
+    skillButton.addEventListener("pointerdown", event => {
+      event.preventDefault();
+      if (!player || input.skillHeld) return;
+      input.skillHeld = true; player.chargeTime = 0; startCharge(player); skillButton.classList.add("pressed");
+      skillButton.setPointerCapture(event.pointerId);
+    });
+    function endSkill(event) {
+      if (!input.skillHeld || !player) return;
+      event?.preventDefault(); input.skillHeld = false;
+      releaseSkill(player, player.chargeTime); player.chargeTime = 0;
+      if (player.action === "charge") player.action = "idle";
+      skillButton.classList.remove("pressed");
+    }
+    skillButton.addEventListener("pointerup", endSkill); skillButton.addEventListener("pointercancel", endSkill);
+
+    // NAVEGACIÓN DE PANTALLAS.
+    document.getElementById("start-btn").addEventListener("click", () => {
+      buildCards(); ui.intro.classList.add("hidden"); ui.select.classList.remove("hidden");
+    });
+    document.getElementById("confirm-pick").addEventListener("click", beginFight);
+    document.getElementById("again-btn").addEventListener("click", () => {
+      ui.result.classList.add("hidden"); ui.select.classList.remove("hidden"); buildCards();
+    });
+  })();
+  </script>
+</body>
+</html>
